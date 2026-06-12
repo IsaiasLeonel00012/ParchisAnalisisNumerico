@@ -1,5 +1,11 @@
+import os
 import sqlite3
 
+
+RUTA_BASE_DATOS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "parchis.db"
+)
 
 COLUMNAS = {
     "jugador": "TEXT",
@@ -14,7 +20,7 @@ COLUMNAS = {
 
 
 def conectar():
-    return sqlite3.connect("parchis.db")
+    return sqlite3.connect(RUTA_BASE_DATOS)
 
 
 def crear_tabla():

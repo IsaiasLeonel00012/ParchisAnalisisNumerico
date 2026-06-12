@@ -9,7 +9,6 @@ H_VALORES = (
     0.0000000001,
 )
 
-
 class Tablero:
 
     def __init__(self):
@@ -28,6 +27,11 @@ class Tablero:
             return "adelante"
 
         return "adelante"
+    
+    def h_para_casilla(self, posicion):
+        # Si posicion es None, usar un h pequeño
+        if posicion is None:    
+            return 0.001
 
     def h_para_casilla(self, posicion):
         return H_VALORES[(posicion - 1) % len(H_VALORES)]

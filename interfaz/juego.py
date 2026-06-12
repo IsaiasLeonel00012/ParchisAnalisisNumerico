@@ -18,8 +18,8 @@ from database.conexion import (
     obtener_h_optimos,
 )
 from logica.coordenadas import CASILLAS, METAS_COLORES
-from logica.diferencias import adelante, atras, centrada, segunda_derivada
-from logica.newton import derivada_newton
+from logica.metodos.diferencias import adelante, atras, centrada, segunda_derivada
+from logica.metodos.newton import derivada_newton
 from logica.tablero import Tablero
 
 
@@ -29,7 +29,7 @@ ANCHO_PANEL = 330
 MARGEN = 20
 TABLERO_REFERENCIA_X = 500
 TABLERO_REFERENCIA_LADO = 900
-ULTIMA_CASILLA = 67
+ULTIMA_CASILLA = 68
 PASOS_META = 67
 
 CONFIGURACION_JUGADORES = (
@@ -87,6 +87,13 @@ NOMBRES_METODOS = {
     "segunda": "Segunda derivada centrada",
 }
 
+
+CASILLA_GANADORA = {
+    "amarillo": 68,
+    "azul": 17,
+    "rojo": 34,
+    "verde": 51,
+}
 
 def crear_ruta(salida):
     return (
@@ -472,22 +479,42 @@ class Juego(arcade.Window):
             self.mensaje = (
                 f"{jugador['nombre']} avanzo {self.dado} casillas"
             )
+
+            print(
+                jugador["nombre"],
+                "pasos:", jugador["pasos"],
+                "casilla:", self.obtener_casilla_jugador(jugador)
+)
+
         else:
             faltan = PASOS_META - jugador["pasos"]
             self.mensaje = (
                 f"{jugador['nombre']} necesita exactamente {faltan}"
             )
-
-        if jugador["pasos"] == PASOS_META:
-            self.ganador = jugador
-            self.mensaje = f"{jugador['nombre']} llego a la meta"
+            # CAMBIAR TURNO aquí
+            self.turno = (self.turno + 1) % len(self.jugadores)
             return
 
         casilla = self.obtener_casilla_jugador(jugador)
-        self.ultimo_resultado = self.calcular_evento_numerico(
-            jugador,
-            casilla
-        )
+        if casilla == CASILLA_GANADORA[jugador["color_nombre"]]:
+            self.ganador = jugador
+            self.mensaje = f"GANO {jugador['nombre'].upper()}!"
+            return
+
+        caixa = self.obtener_casilla_jugador(jugador)
+        # Verificar si ganó
+        if caixa == CASILLA_GANADORA[jugador["color_nombre"]]:
+            self.ganador = jugador
+            self.mensaje = f"GANO {jugador['nombre'].upper()}!"
+            return
+        
+        # Solo calcular si hay casilla (no None)
+        if caixa is not None:
+            self.ultimo_resultado = self.calcular_evento_numerico(
+                jugador,
+                caixa
+            )
+        
         self.turno = (self.turno + 1) % len(self.jugadores)
 
 

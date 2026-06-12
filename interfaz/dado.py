@@ -1,6 +1,5 @@
 import random
 
-
 class Dado:
 
     def lanzar(self):
