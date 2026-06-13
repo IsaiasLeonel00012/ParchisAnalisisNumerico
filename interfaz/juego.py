@@ -5,11 +5,10 @@ import sys
 
 import arcade
 
-sys.path.append(
-    os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )
+RUTA_PROYECTO = os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
 )
+sys.path.append(RUTA_PROYECTO)
 
 from database.conexion import (
     crear_tabla,
@@ -30,7 +29,7 @@ MARGEN = 20
 TABLERO_REFERENCIA_X = 500
 TABLERO_REFERENCIA_LADO = 900
 ULTIMA_CASILLA = 68
-PASOS_META = 67
+PASOS_META = 63
 
 CONFIGURACION_JUGADORES = (
     {
@@ -88,13 +87,6 @@ NOMBRES_METODOS = {
 }
 
 
-CASILLA_GANADORA = {
-    "amarillo": 68,
-    "azul": 17,
-    "rojo": 34,
-    "verde": 51,
-}
-
 def crear_ruta(salida):
     return (
         list(range(salida, ULTIMA_CASILLA + 1))
@@ -111,7 +103,9 @@ class Juego(arcade.Window):
             "Parchis de Analisis Numerico",
             resizable=True
         )
-        self.fondo = arcade.load_texture("recursos/imagenes/fondo.png")
+        self.fondo = arcade.load_texture(
+            os.path.join(RUTA_PROYECTO, "recursos", "imagenes", "fondo.png")
+        )
         self.tablero = Tablero()
         crear_tabla()
         self.reiniciar()
@@ -264,8 +258,9 @@ class Juego(arcade.Window):
             texto_superior - 82,
             arcade.color.WHITE,
             13,
-            width=ANCHO_PANEL - 30
+            width=ANCHO_PANEL - 105
         )
+        self.dibujar_dado(250, texto_superior - 120, 60)
 
         y = texto_superior - 135
         for jugador in self.jugadores:
@@ -304,6 +299,56 @@ class Juego(arcade.Window):
             arcade.color.WHITE,
             12
         )
+
+    def dibujar_dado(self, x, y, lado):
+        arcade.draw_rect_filled(
+            arcade.LBWH(x, y, lado, lado),
+            arcade.color.WHITE
+        )
+        arcade.draw_rect_outline(
+            arcade.LBWH(x, y, lado, lado),
+            arcade.color.BLACK,
+            3
+        )
+
+        puntos = {
+            1: ((0.5, 0.5),),
+            2: ((0.25, 0.75), (0.75, 0.25)),
+            3: ((0.25, 0.75), (0.5, 0.5), (0.75, 0.25)),
+            4: (
+                (0.25, 0.75), (0.75, 0.75),
+                (0.25, 0.25), (0.75, 0.25),
+            ),
+            5: (
+                (0.25, 0.75), (0.75, 0.75), (0.5, 0.5),
+                (0.25, 0.25), (0.75, 0.25),
+            ),
+            6: (
+                (0.25, 0.75), (0.75, 0.75),
+                (0.25, 0.5), (0.75, 0.5),
+                (0.25, 0.25), (0.75, 0.25),
+            ),
+        }
+
+        if self.dado == 0:
+            arcade.draw_text(
+                "?",
+                x + lado / 2,
+                y + lado / 2,
+                arcade.color.BLACK,
+                28,
+                anchor_x="center",
+                anchor_y="center",
+            )
+            return
+
+        for punto_x, punto_y in puntos[self.dado]:
+            arcade.draw_circle_filled(
+                x + punto_x * lado,
+                y + punto_y * lado,
+                lado * 0.08,
+                arcade.color.BLACK
+            )
 
     def dibujar_lineas(self, lineas, y, tamano=12, espacio=20):
         for linea in lineas:
@@ -480,41 +525,25 @@ class Juego(arcade.Window):
                 f"{jugador['nombre']} avanzo {self.dado} casillas"
             )
 
-            print(
-                jugador["nombre"],
-                "pasos:", jugador["pasos"],
-                "casilla:", self.obtener_casilla_jugador(jugador)
-)
-
         else:
             faltan = PASOS_META - jugador["pasos"]
             self.mensaje = (
                 f"{jugador['nombre']} necesita exactamente {faltan}"
             )
-            # CAMBIAR TURNO aquí
             self.turno = (self.turno + 1) % len(self.jugadores)
             return
 
         casilla = self.obtener_casilla_jugador(jugador)
-        if casilla == CASILLA_GANADORA[jugador["color_nombre"]]:
+        if casilla is None:
             self.ganador = jugador
             self.mensaje = f"GANO {jugador['nombre'].upper()}!"
             return
 
-        caixa = self.obtener_casilla_jugador(jugador)
-        # Verificar si ganó
-        if caixa == CASILLA_GANADORA[jugador["color_nombre"]]:
-            self.ganador = jugador
-            self.mensaje = f"GANO {jugador['nombre'].upper()}!"
-            return
-        
-        # Solo calcular si hay casilla (no None)
-        if caixa is not None:
-            self.ultimo_resultado = self.calcular_evento_numerico(
-                jugador,
-                caixa
-            )
-        
+        self.ultimo_resultado = self.calcular_evento_numerico(
+            jugador,
+            casilla
+        )
+
         self.turno = (self.turno + 1) % len(self.jugadores)
 
 

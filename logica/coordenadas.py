@@ -66,7 +66,7 @@ CASILLAS = {
     65: (855, 135),
     66: (855, 95),
     67: (855, 43),
-    68: (950, 400),
+    68: (950, 43),
 }
 
 # Centros de los cuatro triangulos de llegada.

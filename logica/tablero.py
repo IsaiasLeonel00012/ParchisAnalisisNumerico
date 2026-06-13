@@ -9,10 +9,8 @@ H_VALORES = (
     0.0000000001,
 )
 
-class Tablero:
 
-    def __init__(self):
-        self.meta = 68
+class Tablero:
 
     def tipo_casilla(self, posicion):
         if posicion % 11 == 0:
@@ -23,15 +21,7 @@ class Tablero:
             return "centrada"
         if posicion % 3 == 0:
             return "atras"
-        if posicion % 2 == 0:
-            return "adelante"
-
         return "adelante"
-    
-    def h_para_casilla(self, posicion):
-        # Si posicion es None, usar un h pequeño
-        if posicion is None:    
-            return 0.001
 
     def h_para_casilla(self, posicion):
         return H_VALORES[(posicion - 1) % len(H_VALORES)]
