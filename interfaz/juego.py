@@ -16,7 +16,12 @@ from database.conexion import (
     obtener_errores_por_metodo,
     obtener_h_optimos,
 )
-from logica.coordenadas import CASILLAS, METAS_COLORES
+from interfaz.ficha import Ficha
+from logica.coordenadas import (
+    CASILLAS,
+    METAS_COLORES,
+    CASILLAS_CASA,
+)
 from logica.metodos.diferencias import adelante, atras, centrada, segunda_derivada
 from logica.metodos.newton import derivada_newton
 from logica.tablero import Tablero
@@ -93,7 +98,6 @@ def crear_ruta(salida):
         + list(range(1, salida))
     )
 
-
 class Juego(arcade.Window):
 
     def __init__(self):
@@ -110,13 +114,146 @@ class Juego(arcade.Window):
         crear_tabla()
         self.reiniciar()
 
+    def crear_fichas(self):
+        fichas = [Ficha() for _ in range(4)]
+        fichas[0].pasos = 0
+        return fichas
+
+    def fichas_en_casa(self, jugador):
+        return [
+            ficha for ficha in jugador["fichas"]
+            if ficha.esta_en_casa()
+        ]
+
+    def fichas_en_meta(self, jugador):
+        return [
+            ficha for ficha in jugador["fichas"]
+            if ficha.esta_en_meta(PASOS_META)
+        ]
+
+    def fichas_activas(self, jugador):
+        return [
+            ficha for ficha in jugador["fichas"]
+            if ficha.pasos is not None and not ficha.esta_en_meta(PASOS_META)
+        ]
+
+    def es_bloque(self, casilla, excluir_jugador=None):
+        """Devuelve True si en `casilla` hay un bloque (>=2 fichas del mismo jugador).
+        excluir_jugador: nombre a excluir de la comprobación (opcional)."""
+        if casilla is None:
+            return False
+        for jugador in self.jugadores:
+            if excluir_jugador is not None and jugador["nombre"] == excluir_jugador:
+                continue
+            cuenta = 0
+            for ficha in jugador["fichas"]:
+                if not ficha.esta_en_casa() and not ficha.esta_en_meta(PASOS_META):
+                    if jugador["ruta"][ficha.pasos] == casilla:
+                        cuenta += 1
+            if cuenta >= 2:
+                return True
+        return False
+
+    def capturar_en_casilla(self, casilla, jugador_actual):
+        """Envía a casa las fichas de los oponentes en `casilla` y devuelve cuántas se capturaron."""
+        if casilla is None:
+            return 0
+        total = 0
+        for jugador in self.jugadores:
+            if jugador is jugador_actual:
+                continue
+            fichas_a_enviar = []
+            for ficha in jugador["fichas"]:
+                if ficha.esta_en_casa() or ficha.esta_en_meta(PASOS_META):
+                    continue
+                if jugador["ruta"][ficha.pasos] == casilla:
+                    fichas_a_enviar.append(ficha)
+            # Si hay bloqueo (>=2) del oponente no se captura
+            if len(fichas_a_enviar) >= 2:
+                continue
+            for ficha in fichas_a_enviar:
+                ficha.pasos = None
+                total += 1
+        return total
+
+    def obtener_casilla_ficha(self, jugador, ficha):
+        if ficha.esta_en_casa() or ficha.esta_en_meta(PASOS_META):
+            return None
+        return jugador["ruta"][ficha.pasos]
+
+    def obtener_coordenada_ficha(self, jugador, ficha):
+        if ficha.esta_en_casa():
+            color = jugador["color_nombre"]
+            indice = jugador["fichas"].index(ficha)
+            referencia = CASILLAS_CASA[color][indice]
+        elif ficha.esta_en_meta(PASOS_META):
+            referencia = METAS_COLORES[jugador["color_nombre"]]
+        else:
+            casilla = self.obtener_casilla_ficha(jugador, ficha)
+            referencia = CASILLAS[casilla]
+
+        return self.transformar_coordenada(referencia)
+
+    def ruta_bloqueada(self, jugador, pasos_actuales, dado):
+        destino = pasos_actuales + dado
+        for pasos in range(pasos_actuales + 1, destino + 1):
+            casilla = jugador["ruta"][pasos]
+            if self.es_bloque(casilla):
+                return True
+        return False
+
+    def seleccionar_ficha_para_mover(self, jugador, dado):
+        if dado == 5 or dado == 6:
+            casa = self.fichas_en_casa(jugador)
+            if casa:
+                salida = jugador["ruta"][0]
+                if not self.es_bloque(salida):
+                    return casa[0]
+
+        activas = self.fichas_activas(jugador)
+        candidatas = [
+            ficha for ficha in activas
+            if ficha.pasos + dado <= PASOS_META
+            and not self.ruta_bloqueada(jugador, ficha.pasos, dado)
+        ]
+        if not candidatas:
+            return None
+        # Preferir movimientos que capturen fichas del oponente
+        mejor = None
+        max_capturas = -1
+        for ficha in candidatas:
+            destino = ficha.pasos + dado
+            casilla = jugador["ruta"][destino]
+            # no permitir aterrizar en bloque enemigo
+            if self.es_bloque(casilla, excluir_jugador=jugador["nombre"]):
+                continue
+            # contar fichas oponentes en casilla (si <2 serán capturables)
+            capturables = 0
+            for j in self.jugadores:
+                if j is jugador:
+                    continue
+                for f in j["fichas"]:
+                    if f.esta_en_casa() or f.esta_en_meta(PASOS_META):
+                        continue
+                    if j["ruta"][f.pasos] == casilla:
+                        capturables += 1
+            if capturables >= 2:
+                continue
+            if capturables > max_capturas:
+                max_capturas = capturables
+                mejor = ficha
+        if mejor is not None:
+            return mejor
+        # si no hay captura posible, mover la ficha más adelantada
+        return max(candidatas, key=lambda f: f.pasos)
+
     def reiniciar(self):
         self.jugadores = []
 
         for configuracion in CONFIGURACION_JUGADORES:
             jugador = dict(configuracion)
             jugador["ruta"] = crear_ruta(jugador["salida"])
-            jugador["pasos"] = 0
+            jugador["fichas"] = self.crear_fichas()
             self.jugadores.append(jugador)
 
         self.turno = 0
@@ -145,21 +282,6 @@ class Juego(arcade.Window):
         x = tablero_x + (referencia_x - TABLERO_REFERENCIA_X) * escala
         y = tablero_y + referencia_y * escala
         return x, y
-
-    def obtener_casilla_jugador(self, jugador):
-        if jugador["pasos"] == PASOS_META:
-            return None
-        return jugador["ruta"][jugador["pasos"]]
-
-    def obtener_coordenada_jugador(self, jugador):
-        casilla = self.obtener_casilla_jugador(jugador)
-
-        if casilla is None:
-            referencia = METAS_COLORES[jugador["color_nombre"]]
-        else:
-            referencia = CASILLAS[casilla]
-
-        return self.transformar_coordenada(referencia)
 
     def calcular_evento_numerico(self, jugador, casilla):
         metodo = self.tablero.tipo_casilla(casilla)
@@ -264,12 +386,13 @@ class Juego(arcade.Window):
 
         y = texto_superior - 135
         for jugador in self.jugadores:
-            casilla = self.obtener_casilla_jugador(jugador)
-            ubicacion = "META" if casilla is None else f"casilla {casilla}"
+            casa = len(self.fichas_en_casa(jugador))
+            activo = len(self.fichas_activas(jugador))
+            meta = len(self.fichas_en_meta(jugador))
             arcade.draw_text(
                 (
-                    f"{jugador['nombre']}: {ubicacion} "
-                    f"({jugador['pasos']}/{PASOS_META})"
+                    f"{jugador['nombre']}: "
+                    f"casa {casa} / tablero {activo} / meta {meta}"
                 ),
                 15,
                 y,
@@ -430,22 +553,29 @@ class Juego(arcade.Window):
         radio = max(7, 11 * lado_tablero / TABLERO_REFERENCIA_LADO)
         grupos = {}
         for jugador in self.jugadores:
-            casilla = self.obtener_casilla_jugador(jugador)
-            clave = (
-                jugador["color_nombre"]
-                if casilla is None
-                else casilla
-            )
-            grupos.setdefault(clave, []).append(jugador)
+            for ficha in jugador["fichas"]:
+                casilla = self.obtener_casilla_ficha(jugador, ficha)
+                clave = (
+                    jugador["color_nombre"]
+                    if casilla is None
+                    else casilla
+                )
+                grupos.setdefault(clave, []).append((jugador, ficha))
 
-        for jugadores_casilla in grupos.values():
+        for fichas_casilla in grupos.values():
             separacion = radio * 0.75
-            if len(jugadores_casilla) == 1:
+            if len(fichas_casilla) == 1:
                 desplazamientos = ((0, 0),)
-            elif len(jugadores_casilla) == 2:
+            elif len(fichas_casilla) == 2:
                 desplazamientos = (
                     (-separacion, 0),
                     (separacion, 0),
+                )
+            elif len(fichas_casilla) == 3:
+                desplazamientos = (
+                    (-separacion, separacion),
+                    (separacion, separacion),
+                    (0, -separacion),
                 )
             else:
                 desplazamientos = (
@@ -455,11 +585,11 @@ class Juego(arcade.Window):
                     (separacion, -separacion),
                 )
 
-            for jugador, (dx, dy) in zip(
-                jugadores_casilla,
+            for (jugador, ficha), (dx, dy) in zip(
+                fichas_casilla,
                 desplazamientos
             ):
-                x, y = self.obtener_coordenada_jugador(jugador)
+                x, y = self.obtener_coordenada_ficha(jugador, ficha)
                 arcade.draw_circle_filled(
                     x + dx,
                     y + dy,
@@ -517,32 +647,48 @@ class Juego(arcade.Window):
         self.metodo_comparacion = None
         jugador = self.jugadores[self.turno]
         self.dado = random.randint(1, 6)
-        nueva_posicion = jugador["pasos"] + self.dado
 
-        if nueva_posicion <= PASOS_META:
-            jugador["pasos"] = nueva_posicion
+        ficha = self.seleccionar_ficha_para_mover(jugador, self.dado)
+        if ficha is None:
             self.mensaje = (
-                f"{jugador['nombre']} avanzo {self.dado} casillas"
-            )
-
-        else:
-            faltan = PASOS_META - jugador["pasos"]
-            self.mensaje = (
-                f"{jugador['nombre']} necesita exactamente {faltan}"
+                f"{jugador['nombre']} no puede mover con {self.dado}"
             )
             self.turno = (self.turno + 1) % len(self.jugadores)
             return
 
-        casilla = self.obtener_casilla_jugador(jugador)
-        if casilla is None:
-            self.ganador = jugador
-            self.mensaje = f"GANO {jugador['nombre'].upper()}!"
-            return
-
-        self.ultimo_resultado = self.calcular_evento_numerico(
-            jugador,
-            casilla
+        ficha.mover(self.dado)
+        self.mensaje = (
+            f"{jugador['nombre']} movio ficha {self.dado} casillas"
         )
+
+        if ficha.esta_en_meta(PASOS_META):
+            if len(self.fichas_en_meta(jugador)) == 4:
+                self.ganador = jugador
+                self.mensaje = f"GANO {jugador['nombre'].upper()}!"
+                return
+
+        casilla = self.obtener_casilla_ficha(jugador, ficha)
+        if casilla is None:
+            self.ultimo_resultado = None
+        else:
+            self.ultimo_resultado = self.calcular_evento_numerico(
+                jugador,
+                casilla
+            )
+
+        # Aplicar captura: si al aterrizar hay fichas enemigas (y no bloque), enviarlas a casa
+        capturas = 0
+        if casilla is not None:
+            capturas = self.capturar_en_casilla(casilla, jugador)
+            if capturas > 0:
+                self.mensaje = (
+                    f"{jugador['nombre']} capturo {capturas} ficha(s) en casilla {casilla}!"
+                )
+
+        # Turno extra si sacó 6 o realizó una captura
+        if self.dado == 6 or capturas > 0:
+            # mismo jugador repite
+            return
 
         self.turno = (self.turno + 1) % len(self.jugadores)
 
