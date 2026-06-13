@@ -189,8 +189,7 @@ class Juego(arcade.Window):
 
     def puede_salir(self, jugador):
         ocupantes = self.fichas_en_casilla(jugador["salida"])
-        propias = sum(ocupante is jugador for ocupante, _, _ in ocupantes)
-        return propias < 2 and not self.es_barrera(jugador["salida"])
+        return len(ocupantes) < 2
 
     def puede_mover_ficha(self, jugador, indice, pasos):
         ficha = jugador["fichas"][indice]
@@ -209,11 +208,14 @@ class Juego(arcade.Window):
 
         if destino < PASOS_META:
             casilla_destino = jugador["ruta"][destino]
+            ocupantes = self.fichas_en_casilla(casilla_destino)
             propias = sum(
                 ocupante is jugador
-                for ocupante, _, _ in self.fichas_en_casilla(casilla_destino)
+                for ocupante, _, _ in ocupantes
             )
             if propias >= 2:
+                return False
+            if casilla_destino in CASILLAS_SEGURAS and len(ocupantes) >= 2:
                 return False
 
         return True
@@ -774,3 +776,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
