@@ -77,31 +77,10 @@ METAS_COLORES = {
     "verde": (900, 450),
 }
 
-CASILLAS_CASA = {
-    # Casas ubicadas en las cuatro ruedas (esquinas) del tablero.
-    # Coordenadas basadas en los extremos de CASILLAS
-    "rojo": [  # dentro de la rueda superior izquierda
-        (600, 760),
-        (660, 760),
-        (600, 820),
-        (660, 820),
-    ],
-    "azul": [  # dentro de la rueda superior derecha
-        (1240, 760),
-        (1300, 760),
-        (1240, 820),
-        (1300, 820),
-    ],
-    "verde": [  # dentro de la rueda inferior izquierda
-        (600, 120),
-        (660, 120),
-        (600, 180),
-        (660, 180),
-    ],
-    "amarillo": [  # dentro de la rueda inferior derecha
-        (1240, 120),
-        (1300, 120),
-        (1240, 180),
-        (1300, 180),
-    ],
+# Cuatro posiciones para las fichas que todavía no han salido de casa.
+CASAS_COLORES = {
+    "amarillo": ((1240, 135), (1300, 135), (1240, 195), (1300, 195)),
+    "azul": ((1240, 705), (1300, 705), (1240, 765), (1300, 765)),
+    "rojo": ((600, 705), (660, 705), (600, 765), (660, 765)),
+    "verde": ((600, 135), (660, 135), (600, 195), (660, 195)),
 }

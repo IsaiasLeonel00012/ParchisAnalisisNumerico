@@ -16,12 +16,7 @@ from database.conexion import (
     obtener_errores_por_metodo,
     obtener_h_optimos,
 )
-from interfaz.ficha import Ficha
-from logica.coordenadas import (
-    CASILLAS,
-    METAS_COLORES,
-    CASILLAS_CASA,
-)
+from logica.coordenadas import CASAS_COLORES, CASILLAS, METAS_COLORES
 from logica.metodos.diferencias import adelante, atras, centrada, segunda_derivada
 from logica.metodos.newton import derivada_newton
 from logica.tablero import Tablero
@@ -35,6 +30,8 @@ TABLERO_REFERENCIA_X = 500
 TABLERO_REFERENCIA_LADO = 900
 ULTIMA_CASILLA = 68
 PASOS_META = 63
+EN_CASA = -1
+CASILLAS_SEGURAS = {5, 12, 22, 29, 39, 46, 56, 63}
 
 CONFIGURACION_JUGADORES = (
     {
@@ -98,6 +95,7 @@ def crear_ruta(salida):
         + list(range(1, salida))
     )
 
+
 class Juego(arcade.Window):
 
     def __init__(self):
@@ -114,146 +112,18 @@ class Juego(arcade.Window):
         crear_tabla()
         self.reiniciar()
 
-    def crear_fichas(self):
-        fichas = [Ficha() for _ in range(4)]
-        fichas[0].pasos = 0
-        return fichas
-
-    def fichas_en_casa(self, jugador):
-        return [
-            ficha for ficha in jugador["fichas"]
-            if ficha.esta_en_casa()
-        ]
-
-    def fichas_en_meta(self, jugador):
-        return [
-            ficha for ficha in jugador["fichas"]
-            if ficha.esta_en_meta(PASOS_META)
-        ]
-
-    def fichas_activas(self, jugador):
-        return [
-            ficha for ficha in jugador["fichas"]
-            if ficha.pasos is not None and not ficha.esta_en_meta(PASOS_META)
-        ]
-
-    def es_bloque(self, casilla, excluir_jugador=None):
-        """Devuelve True si en `casilla` hay un bloque (>=2 fichas del mismo jugador).
-        excluir_jugador: nombre a excluir de la comprobación (opcional)."""
-        if casilla is None:
-            return False
-        for jugador in self.jugadores:
-            if excluir_jugador is not None and jugador["nombre"] == excluir_jugador:
-                continue
-            cuenta = 0
-            for ficha in jugador["fichas"]:
-                if not ficha.esta_en_casa() and not ficha.esta_en_meta(PASOS_META):
-                    if jugador["ruta"][ficha.pasos] == casilla:
-                        cuenta += 1
-            if cuenta >= 2:
-                return True
-        return False
-
-    def capturar_en_casilla(self, casilla, jugador_actual):
-        """Envía a casa las fichas de los oponentes en `casilla` y devuelve cuántas se capturaron."""
-        if casilla is None:
-            return 0
-        total = 0
-        for jugador in self.jugadores:
-            if jugador is jugador_actual:
-                continue
-            fichas_a_enviar = []
-            for ficha in jugador["fichas"]:
-                if ficha.esta_en_casa() or ficha.esta_en_meta(PASOS_META):
-                    continue
-                if jugador["ruta"][ficha.pasos] == casilla:
-                    fichas_a_enviar.append(ficha)
-            # Si hay bloqueo (>=2) del oponente no se captura
-            if len(fichas_a_enviar) >= 2:
-                continue
-            for ficha in fichas_a_enviar:
-                ficha.pasos = None
-                total += 1
-        return total
-
-    def obtener_casilla_ficha(self, jugador, ficha):
-        if ficha.esta_en_casa() or ficha.esta_en_meta(PASOS_META):
-            return None
-        return jugador["ruta"][ficha.pasos]
-
-    def obtener_coordenada_ficha(self, jugador, ficha):
-        if ficha.esta_en_casa():
-            color = jugador["color_nombre"]
-            indice = jugador["fichas"].index(ficha)
-            referencia = CASILLAS_CASA[color][indice]
-        elif ficha.esta_en_meta(PASOS_META):
-            referencia = METAS_COLORES[jugador["color_nombre"]]
-        else:
-            casilla = self.obtener_casilla_ficha(jugador, ficha)
-            referencia = CASILLAS[casilla]
-
-        return self.transformar_coordenada(referencia)
-
-    def ruta_bloqueada(self, jugador, pasos_actuales, dado):
-        destino = pasos_actuales + dado
-        for pasos in range(pasos_actuales + 1, destino + 1):
-            casilla = jugador["ruta"][pasos]
-            if self.es_bloque(casilla):
-                return True
-        return False
-
-    def seleccionar_ficha_para_mover(self, jugador, dado):
-        if dado == 5 or dado == 6:
-            casa = self.fichas_en_casa(jugador)
-            if casa:
-                salida = jugador["ruta"][0]
-                if not self.es_bloque(salida):
-                    return casa[0]
-
-        activas = self.fichas_activas(jugador)
-        candidatas = [
-            ficha for ficha in activas
-            if ficha.pasos + dado <= PASOS_META
-            and not self.ruta_bloqueada(jugador, ficha.pasos, dado)
-        ]
-        if not candidatas:
-            return None
-        # Preferir movimientos que capturen fichas del oponente
-        mejor = None
-        max_capturas = -1
-        for ficha in candidatas:
-            destino = ficha.pasos + dado
-            casilla = jugador["ruta"][destino]
-            # no permitir aterrizar en bloque enemigo
-            if self.es_bloque(casilla, excluir_jugador=jugador["nombre"]):
-                continue
-            # contar fichas oponentes en casilla (si <2 serán capturables)
-            capturables = 0
-            for j in self.jugadores:
-                if j is jugador:
-                    continue
-                for f in j["fichas"]:
-                    if f.esta_en_casa() or f.esta_en_meta(PASOS_META):
-                        continue
-                    if j["ruta"][f.pasos] == casilla:
-                        capturables += 1
-            if capturables >= 2:
-                continue
-            if capturables > max_capturas:
-                max_capturas = capturables
-                mejor = ficha
-        if mejor is not None:
-            return mejor
-        # si no hay captura posible, mover la ficha más adelantada
-        return max(candidatas, key=lambda f: f.pasos)
-
     def reiniciar(self):
         self.jugadores = []
 
         for configuracion in CONFIGURACION_JUGADORES:
             jugador = dict(configuracion)
             jugador["ruta"] = crear_ruta(jugador["salida"])
-            jugador["fichas"] = self.crear_fichas()
+            jugador["fichas"] = [
+                {"pasos": EN_CASA}
+                for _ in range(4)
+            ]
+            jugador["seises_consecutivos"] = 0
+            jugador["ultima_ficha"] = None
             self.jugadores.append(jugador)
 
         self.turno = 0
@@ -265,6 +135,9 @@ class Juego(arcade.Window):
         self.indice_comparacion = -1
         self.metodo_comparacion = None
         self.comparacion = []
+        self.movimiento_pendiente = None
+        self.fichas_validas = []
+        self.repetir_al_terminar = False
         self.mensaje = "Presiona ESPACIO para lanzar el dado"
 
     def obtener_tablero(self):
@@ -282,6 +155,218 @@ class Juego(arcade.Window):
         x = tablero_x + (referencia_x - TABLERO_REFERENCIA_X) * escala
         y = tablero_y + referencia_y * escala
         return x, y
+
+    def obtener_casilla_ficha(self, jugador, ficha):
+        if ficha["pasos"] in (EN_CASA, PASOS_META):
+            return None
+        return jugador["ruta"][ficha["pasos"]]
+
+    def obtener_coordenada_ficha(self, jugador, ficha, indice):
+        if ficha["pasos"] == EN_CASA:
+            referencia = CASAS_COLORES[jugador["color_nombre"]][indice]
+        elif ficha["pasos"] == PASOS_META:
+            referencia = METAS_COLORES[jugador["color_nombre"]]
+        else:
+            casilla = self.obtener_casilla_ficha(jugador, ficha)
+            referencia = CASILLAS[casilla]
+
+        return self.transformar_coordenada(referencia)
+
+    def fichas_en_casilla(self, casilla):
+        fichas = []
+        for jugador in self.jugadores:
+            for indice, ficha in enumerate(jugador["fichas"]):
+                if self.obtener_casilla_ficha(jugador, ficha) == casilla:
+                    fichas.append((jugador, indice, ficha))
+        return fichas
+
+    def es_barrera(self, casilla):
+        colores = {}
+        for jugador, _, _ in self.fichas_en_casilla(casilla):
+            color = jugador["color_nombre"]
+            colores[color] = colores.get(color, 0) + 1
+        return any(cantidad >= 2 for cantidad in colores.values())
+
+    def puede_salir(self, jugador):
+        ocupantes = self.fichas_en_casilla(jugador["salida"])
+        propias = sum(ocupante is jugador for ocupante, _, _ in ocupantes)
+        return propias < 2 and not self.es_barrera(jugador["salida"])
+
+    def puede_mover_ficha(self, jugador, indice, pasos):
+        ficha = jugador["fichas"][indice]
+        if ficha["pasos"] in (EN_CASA, PASOS_META):
+            return False
+
+        destino = ficha["pasos"] + pasos
+        if destino > PASOS_META:
+            return False
+
+        for posicion in range(ficha["pasos"] + 1, destino + 1):
+            if posicion < PASOS_META:
+                casilla = jugador["ruta"][posicion]
+                if self.es_barrera(casilla):
+                    return False
+
+        if destino < PASOS_META:
+            casilla_destino = jugador["ruta"][destino]
+            propias = sum(
+                ocupante is jugador
+                for ocupante, _, _ in self.fichas_en_casilla(casilla_destino)
+            )
+            if propias >= 2:
+                return False
+
+        return True
+
+    def fichas_de_barrera(self, jugador):
+        por_casilla = {}
+        for indice, ficha in enumerate(jugador["fichas"]):
+            casilla = self.obtener_casilla_ficha(jugador, ficha)
+            if casilla is not None:
+                por_casilla.setdefault(casilla, []).append(indice)
+        return {
+            indice
+            for indices in por_casilla.values()
+            if len(indices) >= 2
+            for indice in indices
+        }
+
+    def obtener_fichas_validas(self, jugador, pasos, romper_barrera=False):
+        validas = [
+            indice
+            for indice in range(len(jugador["fichas"]))
+            if self.puede_mover_ficha(jugador, indice, pasos)
+        ]
+        if romper_barrera:
+            fichas_barrera = self.fichas_de_barrera(jugador)
+            if fichas_barrera:
+                validas = [
+                    indice for indice in validas
+                    if indice in fichas_barrera
+                ]
+        return validas
+
+    def todas_fuera_de_casa(self, jugador):
+        return all(
+            ficha["pasos"] != EN_CASA
+            for ficha in jugador["fichas"]
+        )
+
+    def iniciar_seleccion(self, pasos, tipo):
+        jugador = self.jugadores[self.turno]
+        romper_barrera = tipo == "dado" and self.dado == 6
+        self.fichas_validas = self.obtener_fichas_validas(
+            jugador,
+            pasos,
+            romper_barrera
+        )
+        self.movimiento_pendiente = {"pasos": pasos, "tipo": tipo}
+
+        if not self.fichas_validas:
+            self.mensaje = f"{jugador['nombre']} no tiene movimiento valido"
+            self.finalizar_movimiento()
+            return
+
+        opciones = ", ".join(str(indice + 1) for indice in self.fichas_validas)
+        self.mensaje = f"Elige ficha {opciones} para avanzar {pasos}"
+
+    def lanzar_dado(self):
+        jugador = self.jugadores[self.turno]
+        self.dado = random.randint(1, 6)
+        self.repetir_al_terminar = self.dado == 6
+
+        if self.dado == 6:
+            jugador["seises_consecutivos"] += 1
+        else:
+            jugador["seises_consecutivos"] = 0
+
+        if jugador["seises_consecutivos"] == 3:
+            ultima = jugador["ultima_ficha"]
+            if ultima is not None:
+                ficha = jugador["fichas"][ultima]
+                if ficha["pasos"] != PASOS_META:
+                    ficha["pasos"] = EN_CASA
+            jugador["seises_consecutivos"] = 0
+            self.repetir_al_terminar = False
+            self.mensaje = "Tres seises: la ultima ficha vuelve a casa"
+            self.finalizar_movimiento()
+            return
+
+        fichas_en_casa = [
+            indice
+            for indice, ficha in enumerate(jugador["fichas"])
+            if ficha["pasos"] == EN_CASA
+        ]
+        if self.dado == 5 and fichas_en_casa and self.puede_salir(jugador):
+            self.sacar_ficha(jugador, fichas_en_casa[0])
+            return
+
+        pasos = 7 if self.dado == 6 and self.todas_fuera_de_casa(jugador) else self.dado
+        self.iniciar_seleccion(pasos, "dado")
+
+    def sacar_ficha(self, jugador, indice):
+        jugador["fichas"][indice]["pasos"] = 0
+        jugador["ultima_ficha"] = indice
+        self.mensaje = f"{jugador['nombre']} saco la ficha {indice + 1}"
+        self.ultimo_resultado = self.calcular_evento_numerico(
+            jugador,
+            jugador["salida"]
+        )
+        self.finalizar_movimiento()
+
+    def capturar_en_casilla(self, jugador, casilla):
+        if casilla in CASILLAS_SEGURAS:
+            return False
+
+        capturo = False
+        for rival, _, ficha in self.fichas_en_casilla(casilla):
+            if rival is not jugador:
+                ficha["pasos"] = EN_CASA
+                capturo = True
+        return capturo
+
+    def mover_ficha(self, indice):
+        jugador = self.jugadores[self.turno]
+        if indice not in self.fichas_validas:
+            self.mensaje = f"La ficha {indice + 1} no puede moverse"
+            return
+
+        ficha = jugador["fichas"][indice]
+        pasos = self.movimiento_pendiente["pasos"]
+        ficha["pasos"] += pasos
+        jugador["ultima_ficha"] = indice
+        self.movimiento_pendiente = None
+        self.fichas_validas = []
+
+        if ficha["pasos"] == PASOS_META:
+            if all(f["pasos"] == PASOS_META for f in jugador["fichas"]):
+                self.ganador = jugador
+                self.mensaje = f"GANO {jugador['nombre'].upper()}!"
+                return
+            self.mensaje = f"Ficha {indice + 1} llego a meta: bono de 10"
+            self.iniciar_seleccion(10, "bono_meta")
+            return
+
+        casilla = self.obtener_casilla_ficha(jugador, ficha)
+        self.ultimo_resultado = self.calcular_evento_numerico(jugador, casilla)
+        if self.capturar_en_casilla(jugador, casilla):
+            self.mensaje = f"Ficha {indice + 1} capturo: bono de 20"
+            self.iniciar_seleccion(20, "bono_captura")
+            return
+
+        self.mensaje = f"{jugador['nombre']} movio la ficha {indice + 1}"
+        self.finalizar_movimiento()
+
+    def finalizar_movimiento(self):
+        self.movimiento_pendiente = None
+        self.fichas_validas = []
+        if self.repetir_al_terminar and self.ganador is None:
+            self.repetir_al_terminar = False
+            self.mensaje += ". Lanza otra vez"
+            return
+
+        self.repetir_al_terminar = False
+        self.turno = (self.turno + 1) % len(self.jugadores)
 
     def calcular_evento_numerico(self, jugador, casilla):
         metodo = self.tablero.tipo_casilla(casilla)
@@ -386,13 +471,19 @@ class Juego(arcade.Window):
 
         y = texto_superior - 135
         for jugador in self.jugadores:
-            casa = len(self.fichas_en_casa(jugador))
-            activo = len(self.fichas_activas(jugador))
-            meta = len(self.fichas_en_meta(jugador))
+            en_casa = sum(
+                ficha["pasos"] == EN_CASA
+                for ficha in jugador["fichas"]
+            )
+            en_meta = sum(
+                ficha["pasos"] == PASOS_META
+                for ficha in jugador["fichas"]
+            )
+            en_juego = 4 - en_casa - en_meta
             arcade.draw_text(
                 (
                     f"{jugador['nombre']}: "
-                    f"casa {casa} / tablero {activo} / meta {meta}"
+                    f"casa {en_casa}, juego {en_juego}, meta {en_meta}"
                 ),
                 15,
                 y,
@@ -409,7 +500,7 @@ class Juego(arcade.Window):
             self.dibujar_resultado(y - 10)
 
         arcade.draw_text(
-            "ESPACIO: lanzar   A: h optimo",
+            "ESPACIO: lanzar   1-4: elegir ficha",
             15,
             42,
             arcade.color.WHITE,
@@ -553,43 +644,48 @@ class Juego(arcade.Window):
         radio = max(7, 11 * lado_tablero / TABLERO_REFERENCIA_LADO)
         grupos = {}
         for jugador in self.jugadores:
-            for ficha in jugador["fichas"]:
+            for indice, ficha in enumerate(jugador["fichas"]):
                 casilla = self.obtener_casilla_ficha(jugador, ficha)
-                clave = (
-                    jugador["color_nombre"]
-                    if casilla is None
-                    else casilla
-                )
-                grupos.setdefault(clave, []).append((jugador, ficha))
+                if ficha["pasos"] == EN_CASA:
+                    clave = ("casa", jugador["color_nombre"], indice)
+                elif ficha["pasos"] == PASOS_META:
+                    clave = ("meta", jugador["color_nombre"])
+                else:
+                    clave = ("casilla", casilla)
+                grupos.setdefault(clave, []).append((jugador, indice, ficha))
 
-        for fichas_casilla in grupos.values():
+        for jugadores_casilla in grupos.values():
             separacion = radio * 0.75
-            if len(fichas_casilla) == 1:
+            if len(jugadores_casilla) == 1:
                 desplazamientos = ((0, 0),)
-            elif len(fichas_casilla) == 2:
+            elif len(jugadores_casilla) == 2:
                 desplazamientos = (
                     (-separacion, 0),
                     (separacion, 0),
                 )
-            elif len(fichas_casilla) == 3:
-                desplazamientos = (
-                    (-separacion, separacion),
-                    (separacion, separacion),
-                    (0, -separacion),
-                )
-            else:
+            elif len(jugadores_casilla) <= 4:
                 desplazamientos = (
                     (-separacion, separacion),
                     (separacion, separacion),
                     (-separacion, -separacion),
                     (separacion, -separacion),
                 )
+            else:
+                desplazamientos = tuple(
+                    (
+                        math.cos(indice * 2 * math.pi / len(jugadores_casilla))
+                        * separacion,
+                        math.sin(indice * 2 * math.pi / len(jugadores_casilla))
+                        * separacion,
+                    )
+                    for indice in range(len(jugadores_casilla))
+                )
 
-            for (jugador, ficha), (dx, dy) in zip(
-                fichas_casilla,
+            for (jugador, indice, ficha), (dx, dy) in zip(
+                jugadores_casilla,
                 desplazamientos
             ):
-                x, y = self.obtener_coordenada_ficha(jugador, ficha)
+                x, y = self.obtener_coordenada_ficha(jugador, ficha, indice)
                 arcade.draw_circle_filled(
                     x + dx,
                     y + dy,
@@ -602,6 +698,15 @@ class Juego(arcade.Window):
                     radio,
                     arcade.color.BLACK,
                     2
+                )
+                arcade.draw_text(
+                    str(indice + 1),
+                    x + dx,
+                    y + dy,
+                    arcade.color.BLACK,
+                    max(8, int(radio)),
+                    anchor_x="center",
+                    anchor_y="center",
                 )
 
         if self.ganador is not None:
@@ -640,57 +745,26 @@ class Juego(arcade.Window):
             self.mostrar_resumen = False
             return
 
+        teclas_fichas = {
+            arcade.key.KEY_1: 0,
+            arcade.key.KEY_2: 1,
+            arcade.key.KEY_3: 2,
+            arcade.key.KEY_4: 3,
+        }
+        if symbol in teclas_fichas and self.movimiento_pendiente is not None:
+            self.mover_ficha(teclas_fichas[symbol])
+            return
+
         if symbol != arcade.key.SPACE or self.ganador is not None:
+            return
+
+        if self.movimiento_pendiente is not None:
+            self.mensaje = "Primero elige una ficha con 1, 2, 3 o 4"
             return
 
         self.mostrar_resumen = False
         self.metodo_comparacion = None
-        jugador = self.jugadores[self.turno]
-        self.dado = random.randint(1, 6)
-
-        ficha = self.seleccionar_ficha_para_mover(jugador, self.dado)
-        if ficha is None:
-            self.mensaje = (
-                f"{jugador['nombre']} no puede mover con {self.dado}"
-            )
-            self.turno = (self.turno + 1) % len(self.jugadores)
-            return
-
-        ficha.mover(self.dado)
-        self.mensaje = (
-            f"{jugador['nombre']} movio ficha {self.dado} casillas"
-        )
-
-        if ficha.esta_en_meta(PASOS_META):
-            if len(self.fichas_en_meta(jugador)) == 4:
-                self.ganador = jugador
-                self.mensaje = f"GANO {jugador['nombre'].upper()}!"
-                return
-
-        casilla = self.obtener_casilla_ficha(jugador, ficha)
-        if casilla is None:
-            self.ultimo_resultado = None
-        else:
-            self.ultimo_resultado = self.calcular_evento_numerico(
-                jugador,
-                casilla
-            )
-
-        # Aplicar captura: si al aterrizar hay fichas enemigas (y no bloque), enviarlas a casa
-        capturas = 0
-        if casilla is not None:
-            capturas = self.capturar_en_casilla(casilla, jugador)
-            if capturas > 0:
-                self.mensaje = (
-                    f"{jugador['nombre']} capturo {capturas} ficha(s) en casilla {casilla}!"
-                )
-
-        # Turno extra si sacó 6 o realizó una captura
-        if self.dado == 6 or capturas > 0:
-            # mismo jugador repite
-            return
-
-        self.turno = (self.turno + 1) % len(self.jugadores)
+        self.lanzar_dado()
 
 
 def main():
