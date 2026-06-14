@@ -509,56 +509,191 @@ class Juego(arcade.Window):
         return resultado
 
     def dibujar_panel(self):
-        texto_superior = self.height - 45
+        x = 15
+        y = self.height - 30
         jugador_actual = self.jugadores[self.turno]
 
         arcade.draw_text(
             "PARCHIS DE ANALISIS NUMERICO",
-            15,
-            texto_superior,
+            x,
+            y,
             arcade.color.WHITE,
             17,
             width=ANCHO_PANEL - 30
         )
+        y -= 35
+
         arcade.draw_text(
-            f"Turno: {jugador_actual['nombre']}   Dado: {self.dado}",
-            15,
-            texto_superior - 45,
-            jugador_actual["color"],
-            18
+            "=== TURNO ACTUAL ===",
+            x,
+            y,
+            arcade.color.LIGHT_GRAY,
+            13
         )
+        y -= 20
+        arcade.draw_text(
+            jugador_actual["nombre"],
+            x,
+            y,
+            jugador_actual["color"],
+            20
+        )
+        y -= 28
+
+        arcade.draw_text(
+            f"Dado: {self.dado if self.dado > 0 else '?'}",
+            x,
+            y,
+            arcade.color.WHITE,
+            14
+        )
+        self.dibujar_dado(ANCHO_PANEL - 85, self.height - 140, 70)
+        y -= 22
+
+        arcade.draw_text(
+            f"Seises: {jugador_actual['seises_consecutivos']}",
+            x,
+            y,
+            arcade.color.LIGHT_YELLOW,
+            12
+        )
+        y -= 25
+
+        arcade.draw_text(
+            "=== MENSAJE ===",
+            x,
+            y,
+            arcade.color.LIGHT_GRAY,
+            13
+        )
+        y -= 18
         arcade.draw_text(
             self.mensaje,
-            15,
-            texto_superior - 82,
+            x,
+            y,
             arcade.color.WHITE,
-            13,
-            width=ANCHO_PANEL - 105
+            12,
+            width=ANCHO_PANEL - 30
         )
-        self.dibujar_dado(250, texto_superior - 120, 60)
+        y -= 50
 
-        y = texto_superior - 135
+        arcade.draw_text(
+            "=== TUS FICHAS ===",
+            x,
+            y,
+            arcade.color.LIGHT_GRAY,
+            13
+        )
+        y -= 18
+
+        for indice, ficha in enumerate(jugador_actual["fichas"]):
+            if ficha["pasos"] == EN_CASA:
+                estado = "En Casa"
+                color = arcade.color.GRAY
+            elif ficha["pasos"] == PASOS_META:
+                estado = "En Meta!"
+                color = arcade.color.LIGHT_GREEN
+            else:
+                faltantes = PASOS_META - ficha["pasos"]
+                estado = f"{faltantes} casillas"
+                color = arcade.color.WHITE
+
+            arcade.draw_text(
+                f"Ficha {indice + 1}: {estado}",
+                x + 10,
+                y,
+                color,
+                12
+            )
+            y -= 18
+
+        y -= 8
+
+        if self.movimiento_pendiente is not None:
+            opciones = ", ".join(
+                str(i + 1) for i in self.fichas_validas
+            ) or "ninguna"
+            arcade.draw_text(
+                "=== MOVIMIENTO ===",
+                x,
+                y,
+                arcade.color.YELLOW,
+                13
+            )
+            y -= 18
+            arcade.draw_text(
+                f"Avanza: {self.movimiento_pendiente['pasos']} pasos",
+                x + 10,
+                y,
+                arcade.color.WHITE,
+                12
+            )
+            y -= 18
+            arcade.draw_text(
+                f"Fichas: {opciones}",
+                x + 10,
+                y,
+                arcade.color.WHITE,
+                12,
+                width=ANCHO_PANEL - 30
+            )
+            y -= 25
+        else:
+            arcade.draw_text(
+                "=== PRÓXIMA ACCIÓN ===",
+                x,
+                y,
+                arcade.color.LIGHT_GRAY,
+                13
+            )
+            y -= 18
+            arcade.draw_text(
+                "Presiona ESPACIO",
+                x + 10,
+                y,
+                arcade.color.WHITE,
+                12
+            )
+            y -= 18
+            arcade.draw_text(
+                "para lanzar dado",
+                x + 10,
+                y,
+                arcade.color.WHITE,
+                12
+            )
+            y -= 25
+
+        arcade.draw_text(
+            "=== OTROS JUGADORES ===",
+            x,
+            y,
+            arcade.color.LIGHT_GRAY,
+            13
+        )
+        y -= 18
+
         for jugador in self.jugadores:
+            if jugador is jugador_actual:
+                continue
             en_casa = sum(
-                ficha["pasos"] == EN_CASA
-                for ficha in jugador["fichas"]
+                f["pasos"] == EN_CASA
+                for f in jugador["fichas"]
             )
             en_meta = sum(
-                ficha["pasos"] == PASOS_META
-                for ficha in jugador["fichas"]
+                f["pasos"] == PASOS_META
+                for f in jugador["fichas"]
             )
-            en_juego = 4 - en_casa - en_meta
             arcade.draw_text(
-                (
-                    f"{jugador['nombre']}: "
-                    f"casa {en_casa}, juego {en_juego}, meta {en_meta}"
-                ),
-                15,
+                f"{jugador['nombre']}: meta {en_meta}/4",
+                x + 10,
                 y,
                 jugador["color"],
                 12
             )
-            y -= 25
+            y -= 16
+
+        y -= 8
 
         if self.mostrar_resumen:
             self.dibujar_resumen(y - 10)
@@ -568,18 +703,25 @@ class Juego(arcade.Window):
             self.dibujar_resultado(y - 10)
 
         arcade.draw_text(
-            "ESPACIO: lanzar   1-4: elegir ficha",
-            15,
-            42,
-            arcade.color.WHITE,
+            "=== CONTROLES ===",
+            x,
+            50,
+            arcade.color.LIGHT_GRAY,
             12
         )
         arcade.draw_text(
-            "C: comparar errores   R: reiniciar",
-            15,
-            22,
+            "ESPACIO: lanzar   1-4: ficha",
+            x + 10,
+            32,
             arcade.color.WHITE,
-            12
+            11
+        )
+        arcade.draw_text(
+            "C: comparar   R: reiniciar",
+            x + 10,
+            18,
+            arcade.color.WHITE,
+            11
         )
 
     def dibujar_dado(self, x, y, lado):
