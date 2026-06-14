@@ -16,7 +16,11 @@ from database.conexion import (
     obtener_errores_por_metodo,
     obtener_h_optimos,
 )
-from logica.coordenadas import CASAS_COLORES, CASILLAS, METAS_COLORES
+from logica.coordenadas import (
+    CASAS_COLORES,
+    CASILLAS,
+    METAS_COLORES,
+)
 from logica.metodos.diferencias import adelante, atras, centrada, segunda_derivada
 from logica.metodos.newton import derivada_newton
 from logica.tablero import Tablero
@@ -31,7 +35,7 @@ TABLERO_REFERENCIA_LADO = 900
 ULTIMA_CASILLA = 68
 PASOS_META = 63
 EN_CASA = -1
-CASILLAS_SEGURAS = {5, 12, 22, 29, 39, 46, 56, 63}
+CASILLAS_SEGURAS = {12, 17, 29, 34, 46, 51, 63, 68}
 
 CONFIGURACION_JUGADORES = (
     {
@@ -248,24 +252,52 @@ class Juego(arcade.Window):
                 ]
         return validas
 
+    def calcular_fichas_validas_pendientes(self):
+        if self.movimiento_pendiente is None:
+            return []
+
+        jugador = self.jugadores[self.turno]
+        pasos = self.movimiento_pendiente["pasos"]
+        tipo = self.movimiento_pendiente["tipo"]
+        excluir_indice = self.movimiento_pendiente.get("excluir_indice")
+        romper_barrera = tipo == "dado" and self.dado == 6
+        validas = self.obtener_fichas_validas(jugador, pasos, romper_barrera)
+
+        if excluir_indice is not None:
+            validas = [
+                indice
+                for indice in validas
+                if indice != excluir_indice
+            ]
+
+        return validas
+
     def todas_fuera_de_casa(self, jugador):
         return all(
             ficha["pasos"] != EN_CASA
             for ficha in jugador["fichas"]
         )
 
-    def iniciar_seleccion(self, pasos, tipo):
+    def iniciar_seleccion(self, pasos, tipo, excluir_indice=None):
         jugador = self.jugadores[self.turno]
-        romper_barrera = tipo == "dado" and self.dado == 6
-        self.fichas_validas = self.obtener_fichas_validas(
-            jugador,
-            pasos,
-            romper_barrera
-        )
-        self.movimiento_pendiente = {"pasos": pasos, "tipo": tipo}
+        self.movimiento_pendiente = {
+            "pasos": pasos,
+            "tipo": tipo,
+            "excluir_indice": excluir_indice,
+        }
+        self.fichas_validas = self.calcular_fichas_validas_pendientes()
 
         if not self.fichas_validas:
-            self.mensaje = f"{jugador['nombre']} no tiene movimiento valido"
+            if tipo == "bono_meta":
+                self.mensaje = (
+                    f"{jugador['nombre']} no puede usar el bono de 10"
+                )
+            elif tipo == "bono_captura":
+                self.mensaje = (
+                    f"{jugador['nombre']} no puede usar el bono de 20"
+                )
+            else:
+                self.mensaje = f"{jugador['nombre']} no tiene movimiento valido"
             self.finalizar_movimiento()
             return
 
@@ -285,12 +317,25 @@ class Juego(arcade.Window):
         if jugador["seises_consecutivos"] == 3:
             ultima = jugador["ultima_ficha"]
             if ultima is not None:
-                ficha = jugador["fichas"][ultima]
-                if ficha["pasos"] != PASOS_META:
-                    ficha["pasos"] = EN_CASA
+                jugador["fichas"][ultima]["pasos"] = EN_CASA
+                self.mensaje = (
+                    "Tres seises seguidos: "
+                    f"la ficha {ultima + 1} vuelve a casa"
+                )
+            else:
+                self.mensaje = "Tres seises seguidos: pierde el turno"
             jugador["seises_consecutivos"] = 0
             self.repetir_al_terminar = False
-            self.mensaje = "Tres seises: la ultima ficha vuelve a casa"
+            self.finalizar_movimiento()
+            return
+
+        if self.dado == 6:
+            todas_fuera = self.todas_fuera_de_casa(jugador)
+            if self.fichas_de_barrera(jugador) or todas_fuera:
+                pasos = 7 if todas_fuera else 6
+                self.iniciar_seleccion(pasos, "dado")
+                return
+            self.mensaje = f"{jugador['nombre']} saco 6: repite turno sin mover"
             self.finalizar_movimiento()
             return
 
@@ -299,12 +344,17 @@ class Juego(arcade.Window):
             for indice, ficha in enumerate(jugador["fichas"])
             if ficha["pasos"] == EN_CASA
         ]
-        if self.dado == 5 and fichas_en_casa and self.puede_salir(jugador):
-            self.sacar_ficha(jugador, fichas_en_casa[0])
+        if self.dado == 5 and fichas_en_casa:
+            if self.puede_salir(jugador):
+                self.sacar_ficha(jugador, fichas_en_casa[0])
+            else:
+                self.mensaje = (
+                    f"{jugador['nombre']} saco 5, pero la salida esta bloqueada"
+                )
+                self.finalizar_movimiento()
             return
 
-        pasos = 7 if self.dado == 6 and self.todas_fuera_de_casa(jugador) else self.dado
-        self.iniciar_seleccion(pasos, "dado")
+        self.iniciar_seleccion(self.dado, "dado")
 
     def sacar_ficha(self, jugador, indice):
         jugador["fichas"][indice]["pasos"] = 0
@@ -329,8 +379,16 @@ class Juego(arcade.Window):
 
     def mover_ficha(self, indice):
         jugador = self.jugadores[self.turno]
+        self.fichas_validas = self.calcular_fichas_validas_pendientes()
         if indice not in self.fichas_validas:
-            self.mensaje = f"La ficha {indice + 1} no puede moverse"
+            opciones = ", ".join(
+                str(indice_valido + 1)
+                for indice_valido in self.fichas_validas
+            )
+            if opciones:
+                self.mensaje = f"Opciones disponibles: {opciones}"
+            else:
+                self.mensaje = "No hay fichas que puedan moverse"
             return
 
         ficha = jugador["fichas"][indice]
@@ -345,8 +403,10 @@ class Juego(arcade.Window):
                 self.ganador = jugador
                 self.mensaje = f"GANO {jugador['nombre'].upper()}!"
                 return
-            self.mensaje = f"Ficha {indice + 1} llego a meta: bono de 10"
-            self.iniciar_seleccion(10, "bono_meta")
+            self.mensaje = (
+                f"Ficha {indice + 1} llego a meta: bono de 10 con otra ficha"
+            )
+            self.iniciar_seleccion(10, "bono_meta", excluir_indice=indice)
             return
 
         casilla = self.obtener_casilla_ficha(jugador, ficha)
@@ -643,7 +703,7 @@ class Juego(arcade.Window):
         )
         self.dibujar_panel()
 
-        radio = max(7, 11 * lado_tablero / TABLERO_REFERENCIA_LADO)
+        radio = max(9, 15 * lado_tablero / TABLERO_REFERENCIA_LADO)
         grupos = {}
         for jugador in self.jugadores:
             for indice, ficha in enumerate(jugador["fichas"]):
@@ -776,4 +836,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
