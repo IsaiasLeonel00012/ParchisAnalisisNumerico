@@ -1,7 +1,6 @@
 def diferencias_divididas(x, y):
 
     n = len(x)
-
     tabla = [[0 for _ in range(n)] for _ in range(n)]
 
     for i in range(n):

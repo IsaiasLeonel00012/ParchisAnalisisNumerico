@@ -163,6 +163,8 @@ class Juego(arcade.Window):
     def obtener_casilla_ficha(self, jugador, ficha):
         if ficha["pasos"] in (EN_CASA, PASOS_META):
             return None
+        if ficha["pasos"] < 0 or ficha["pasos"] >= len(jugador["ruta"]):
+            return None
         return jugador["ruta"][ficha["pasos"]]
 
     def obtener_coordenada_ficha(self, jugador, ficha, indice):
@@ -367,6 +369,10 @@ class Juego(arcade.Window):
         self.finalizar_movimiento()
 
     def capturar_en_casilla(self, jugador, casilla):
+        # Depuración: mostrar información sobre la casilla y ocupantes
+        ocupantes = [ (r['nombre'], idx) for r, idx, _ in self.fichas_en_casilla(casilla) ]
+        print(f"[DEBUG] capturar_en_casilla casilla={casilla} segura={casilla in CASILLAS_SEGURAS} ocupantes={ocupantes}")
+
         if casilla in CASILLAS_SEGURAS:
             return False
 
@@ -703,7 +709,7 @@ class Juego(arcade.Window):
         )
         self.dibujar_panel()
 
-        radio = max(9, 15 * lado_tablero / TABLERO_REFERENCIA_LADO)
+        radio = max(12, 18 * lado_tablero / TABLERO_REFERENCIA_LADO)
         grupos = {}
         for jugador in self.jugadores:
             for indice, ficha in enumerate(jugador["fichas"]):
@@ -821,7 +827,12 @@ class Juego(arcade.Window):
             return
 
         if self.movimiento_pendiente is not None:
-            self.mensaje = "Primero elige una ficha con 1, 2, 3 o 4"
+            validas = self.calcular_fichas_validas_pendientes()
+            opciones = ", ".join(str(i + 1) for i in validas)
+            if opciones:
+                self.mensaje = f"Primero elige una ficha: {opciones}"
+            else:
+                self.mensaje = "No hay fichas que puedan moverse"
             return
 
         self.mostrar_resumen = False
