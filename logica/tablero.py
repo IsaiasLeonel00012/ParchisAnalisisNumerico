@@ -13,6 +13,7 @@ H_VALORES = (
 class Tablero:
 
     def tipo_casilla(self, posicion):
+        #selecciona el método numérico según la posición de la casilla.
         if posicion % 11 == 0:
             return "segunda"
         if posicion % 7 == 0:
@@ -24,4 +25,5 @@ class Tablero:
         return "adelante"
 
     def h_para_casilla(self, posicion):
+        #devuelve un valor de h diferente según la casilla.
         return H_VALORES[(posicion - 1) % len(H_VALORES)]

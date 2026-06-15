@@ -26,6 +26,7 @@ from logica.metodos.newton import derivada_newton
 from logica.tablero import Tablero
 
 
+#configuración de ventana, tablero y reglas básicas del juego.
 ANCHO = 1280
 ALTO = 800
 ANCHO_PANEL = 330
@@ -369,7 +370,9 @@ class Juego(arcade.Window):
         self.finalizar_movimiento()
 
     def capturar_en_casilla(self, jugador, casilla):
-        # Depuración: mostrar información sobre la casilla y ocupantes
+
+        #Depuración: mostrar información sobre la casilla y ocupantes
+
         ocupantes = [ (r['nombre'], idx) for r, idx, _ in self.fichas_en_casilla(casilla) ]
         print(f"[DEBUG] capturar_en_casilla casilla={casilla} segura={casilla in CASILLAS_SEGURAS} ocupantes={ocupantes}")
 
@@ -437,6 +440,8 @@ class Juego(arcade.Window):
         self.turno = (self.turno + 1) % len(self.jugadores)
 
     def calcular_evento_numerico(self, jugador, casilla):
+        # Calcula la derivada aproximada según la casilla del tablero.
+        # El método y el paso h se eligen automáticamente.
         metodo = self.tablero.tipo_casilla(casilla)
         h = self.tablero.h_para_casilla(casilla)
         funcion = jugador["funcion"]
@@ -524,7 +529,7 @@ class Juego(arcade.Window):
         y -= 35
 
         arcade.draw_text(
-            "=== TURNO ACTUAL ===",
+            "TURNO ACTUAL",
             x,
             y,
             arcade.color.LIGHT_GRAY,
@@ -560,7 +565,7 @@ class Juego(arcade.Window):
         y -= 25
 
         arcade.draw_text(
-            "=== MENSAJE ===",
+            "MENSAJE",
             x,
             y,
             arcade.color.LIGHT_GRAY,
@@ -578,7 +583,7 @@ class Juego(arcade.Window):
         y -= 50
 
         arcade.draw_text(
-            "=== TUS FICHAS ===",
+            "TUS FICHAS",
             x,
             y,
             arcade.color.LIGHT_GRAY,
@@ -614,7 +619,7 @@ class Juego(arcade.Window):
                 str(i + 1) for i in self.fichas_validas
             ) or "ninguna"
             arcade.draw_text(
-                "=== MOVIMIENTO ===",
+                "MOVIMIENTO",
                 x,
                 y,
                 arcade.color.YELLOW,
@@ -640,7 +645,7 @@ class Juego(arcade.Window):
             y -= 25
         else:
             arcade.draw_text(
-                "=== PRÓXIMA ACCIÓN ===",
+                "PRÓXIMA ACCIÓN",
                 x,
                 y,
                 arcade.color.LIGHT_GRAY,
@@ -665,7 +670,7 @@ class Juego(arcade.Window):
             y -= 25
 
         arcade.draw_text(
-            "=== OTROS JUGADORES ===",
+            "OTROS JUGADORES ",
             x,
             y,
             arcade.color.LIGHT_GRAY,

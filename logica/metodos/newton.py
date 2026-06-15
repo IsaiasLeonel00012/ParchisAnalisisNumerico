@@ -1,3 +1,5 @@
+#Cálculo de diferencias divididas para interpolación de Newton.
+
 def diferencias_divididas(x, y):
 
     n = len(x)
@@ -17,6 +19,7 @@ def diferencias_divididas(x, y):
 
 
 def derivada_newton(x, y, punto):
+    #usa la tabla de diferencias divididas para calcular la derivada.
     tabla = diferencias_divididas(x, y)
     coeficientes = tabla[0]
     derivada = 0.0

@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-
+#ubicación del archivo de base de datos SQLite dentro del proyecto.
 RUTA_BASE_DATOS = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "parchis.db"
@@ -24,6 +24,7 @@ def conectar():
 
 
 def crear_tabla():
+    #crea la tabla de resultados si no existe y agrega columnas nuevas.
     with conectar() as conexion:
         conexion.execute("""
             CREATE TABLE IF NOT EXISTS partidas(
@@ -90,6 +91,7 @@ def guardar_resultado(
 
 
 def obtener_h_optimos():
+    #obtiene el mejor valor de h para cada método según el menor error registrado.
     crear_tabla()
 
     with conectar() as conexion:
@@ -105,6 +107,7 @@ def obtener_h_optimos():
 
 
 def obtener_errores_por_metodo(metodo):
+    #devuelve el error mínimo observado para cada h del método elegido.
     crear_tabla()
 
     with conectar() as conexion:

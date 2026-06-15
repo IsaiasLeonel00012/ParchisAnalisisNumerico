@@ -1,8 +1,9 @@
+#Representa una ficha del parchis y su estado de avance.
 class Ficha:
 
     def __init__(self):
-        # pasos == None means the ficha is en casa
-        # pasos == PASOS_META means the ficha reached la meta
+        #pasos == None significa que la ficha está en casa.
+        #pasos == PASOS_META significa que la ficha llegó a la meta.
         self.pasos = None
 
     def esta_en_casa(self):

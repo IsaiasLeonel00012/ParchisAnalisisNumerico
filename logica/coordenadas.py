@@ -69,7 +69,7 @@ CASILLAS = {
     68: (950, 43),
 }
 
-# Centros de los cuatro triangulos de llegada.
+#centros de los cuatro triangulos de llegada.
 METAS_COLORES = {
     "amarillo": (950, 400),
     "azul": (1000, 450),
@@ -77,7 +77,7 @@ METAS_COLORES = {
     "verde": (900, 450),
 }
 
-# Cuatro posiciones para las fichas que todavía no han salido de casa.
+#cuatro posiciones para las fichas que todavía no han salido de casa.
 CASAS_COLORES = {
     "amarillo": ((1240, 135), (1300, 135), (1240, 195), (1300, 195)),
     "azul": ((1240, 705), (1300, 705), (1240, 765), (1300, 765)),
